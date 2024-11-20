@@ -1,37 +1,52 @@
 package email;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.TreeMap;
 
 /**
  * A datatype that represents a mailbox or collection of email.
  */
 public class MailBox {
-    // TODO Implement this datatype
+
+    TreeMap<Email, Boolean> emails = new TreeMap<>((e1, e2) -> {
+        if (e1.getTimestamp() == e2.getTimestamp()) {
+            return e2.getId().compareTo(e1.getId());
+        }
+        return e2.getTimestamp() - e1.getTimestamp();
+    });
 
     /**
      * Add a new message to the mailbox
      *
      * @param msg the message to add
      * @return true if the message was added to the mailbox,
-     * and false if it was not added to the mailbox (because a duplicate exists
-     * or msg was null)
+     *         and false if it was not added to the mailbox (because a duplicate
+     *         exists
+     *         or msg was null)
      */
     public boolean addMsg(Email msg) {
-        // TODO: Implement this method
-        return false;
+        if (msg == null) {
+            return false;
+        }
+        if (emails.containsKey(msg)) {
+            return false;
+        }
+        emails.put(msg, false);
+        return true;
     }
-
 
     /**
      * Return the email with the provided id
+     * 
      * @param msgID the id of the email to retrieve, is not null
      * @return the email with the provided id
-     * and null if such an email does not exist in this mailbox
+     *         and null if such an email does not exist in this mailbox
      */
     public Email getMsg(UUID msgID) {
-        // TODO: Implement this method
-        throw new UnsupportedOperationException(); // You should change this!
+        return emails.keySet().stream().filter(e -> e.getId().equals(msgID)).findFirst().orElse(null);
     }
 
     /**
@@ -39,10 +54,12 @@ public class MailBox {
      *
      * @param msgId the id of the message to delete
      * @return true if the message existed in the mailbox and it was removed,
-     * else return false
+     *         else return false
      */
     public boolean delMsg(UUID msgId) {
-        // TODO: Implement this method
+        if (emails.keySet().removeIf(e -> e.getId().equals(msgId))) {
+            return true;
+        }
         return false;
     }
 
@@ -52,8 +69,7 @@ public class MailBox {
      * @return the number of messages in the mailbox
      */
     public int getMsgCount() {
-        // TODO: Implement this method
-        return -1;
+        return emails.size();
     }
 
     /**
@@ -63,8 +79,12 @@ public class MailBox {
      * @return true if the message exists in the mailbox and false otherwise
      */
     public boolean markRead(UUID msgID) {
-        // TODO: Implement this method
-        return false;
+        Email email = getMsg(msgID);
+        if (email == null) {
+            return false;
+        }
+        emails.put(email, true);
+        return true;
     }
 
     /**
@@ -74,8 +94,12 @@ public class MailBox {
      * @return true if the message exists in the mailbox and false otherwise
      */
     public boolean markUnread(UUID msgID) {
-        // TODO: Implement this method
-        return false;
+        Email email = getMsg(msgID);
+        if (email == null) {
+            return false;
+        }
+        emails.put(email, false);
+        return true;
     }
 
     /**
@@ -86,17 +110,20 @@ public class MailBox {
      * @throws IllegalArgumentException if the message does not exist in the mailbox
      */
     public boolean isRead(UUID msgID) {
-        // TODO: Implement this method
-        return false;
+        Email email = getMsg(msgID);
+        if (email == null) {
+            throw new IllegalArgumentException();
+        }
+        return emails.get(email);
     }
 
     /**
      * Obtain the number of unread messages in this mailbox
+     * 
      * @return the number of unread messages in this mailbox
      */
     public int getUnreadMsgCount() {
-        // TODO: Implement this method
-        return -1;
+        return (int) emails.values().stream().filter(b -> !b).count();
     }
 
     /**
@@ -104,12 +131,12 @@ public class MailBox {
      * with most recent message first
      *
      * @return a list that represents a view of the mailbox with messages sorted
-     * by timestamp, with most recent message first. If multiple messages have
-     * the same timestamp, the ordering among those messages is arbitrary.
+     *         by timestamp, with most recent message first. If multiple messages
+     *         have
+     *         the same timestamp, the ordering among those messages is arbitrary.
      */
     public List<Email> getTimestampView() {
-        // TODO: Implement this method
-        return null;
+        return emails.keySet().stream().toList();
     }
 
     /**
@@ -120,37 +147,70 @@ public class MailBox {
      * @param startTime the start of the time range, >= 0
      * @param endTime   the end of the time range, >= startTime
      * @return all the messages with timestamps such that
-     * startTime <= timestamp <= endTime,
-     * sorted with the earliest message first and breaking ties arbitrarily
+     *         startTime <= timestamp <= endTime,
+     *         sorted with the earliest message first and breaking ties arbitrarily
      */
     public List<Email> getMsgsInRange(int startTime, int endTime) {
-        // TODO: Implement this method
-        return null;
+        List<Email> msgs = emails.keySet().stream()
+                .filter(e -> e.getTimestamp() >= startTime && e.getTimestamp() <= endTime)
+                .collect(Collectors.toList());
+        msgs.sort((e1, e2) -> e1.getTimestamp() - e2.getTimestamp());
+        return msgs;
     }
-
 
     /**
      * Mark all the messages in the same thread as the message
      * with the given id as read
+     * 
      * @param msgID the id of a message whose entire thread is to be marked as read
      * @return true if a message with that id is in this mailbox
-     * and false otherwise
+     *         and false otherwise
      */
     public boolean markThreadAsRead(UUID msgID) {
-        // TODO: Implement this method
-        return false;
+        Email email = getMsg(msgID);
+        if (email == null) {
+            return false;
+        }
+        emails.put(email, true);
+        markUpstreamAs(email, true);
+        markDownstreamAs(email, true);
+        return true;
+    }
+
+    private void markUpstreamAs(Email email, boolean read) {
+        while (email.getResponseTo() != Email.NO_PARENT_ID) {
+            email = getMsg(email.getResponseTo());
+            emails.put(email, read);
+        }
+    }
+
+    private void markDownstreamAs(Email email, boolean read) {
+        for (Email e : emails.keySet()) {
+            if (e.getResponseTo().equals(email.getId())) {
+                emails.put(e, read);
+                markDownstreamAs(e, read);
+            }
+        }
     }
 
     /**
      * Mark all the messages in the same thread as the message
      * with the given id as unread
-     * @param msgID the id of a message whose entire thread is to be marked as unread
+     * 
+     * @param msgID the id of a message whose entire thread is to be marked as
+     *              unread
      * @return true if a message with that id is in this mailbox
-     * and false otherwise
+     *         and false otherwise
      */
     public boolean markThreadAsUnread(UUID msgID) {
-        // TODO: Implement this method
-        return false;
+        Email email = getMsg(msgID);
+        if (email == null) {
+            return false;
+        }
+        emails.put(email, false);
+        markUpstreamAs(email, false);
+        markDownstreamAs(email, false);
+        return true;
     }
 
     /**
@@ -171,9 +231,30 @@ public class MailBox {
      * @return a list that represents a thread-based view of the mailbox.
      */
     public List<Email> getThreadedView() {
-        // TODO: Implement this method
-        return null;
+        List<List<Email>> threads = new ArrayList<>();
+        for (Email email : emails.keySet()) {
+            if (email.getResponseTo() == Email.NO_PARENT_ID) {
+                threads.add(getThread(email));
+            }
+        }
+        threads.sort((t1, t2) -> t2.get(0).getTimestamp() - t1.get(0).getTimestamp());
+        return threads.stream().flatMap(List::stream).toList();
     }
 
+    private List<Email> getThread(Email email) {
+        List<Email> thread = new ArrayList<>();
+        thread.add(email);
+        addDownstream(email, thread);
+        thread.sort((e1, e2) -> e2.getTimestamp() - e1.getTimestamp());
+        return thread;
+    }
 
+    private void addDownstream(Email email, List<Email> thread) {
+        for (Email e : emails.keySet()) {
+            if (e.getResponseTo().equals(email.getId())) {
+                thread.add(e);
+                addDownstream(e, thread);
+            }
+        }
+    }
 }

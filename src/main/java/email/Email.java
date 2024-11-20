@@ -51,7 +51,6 @@ public class Email implements Cloneable, TimestampedObject {
         this.responseTo = responseTo;
     }
 
-
     /**
      * Create a new email message that is not a response to another message
      *

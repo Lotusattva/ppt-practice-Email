@@ -17,3 +17,5 @@ settings.gradle
 vcs.xml
 */.DS_Store
 *.iml
+
+.vscode/
